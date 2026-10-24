@@ -27,7 +27,8 @@ export default function Navbar({ activeView, setActiveView }) {
           onClick={() => setActiveView("client")}
         >
           <CalendarCheck className="tab-icon" size={16} />
-          <span>Side A: Client App</span>
+          <span className="tab-label-full">Side A: Client App</span>
+          <span className="tab-label-short">Client App</span>
         </button>
         <button
           type="button"
@@ -35,7 +36,8 @@ export default function Navbar({ activeView, setActiveView }) {
           onClick={() => setActiveView("dashboard")}
         >
           <ShieldCheck className="tab-icon" size={16} />
-          <span>Side B: Nutritionist Dashboard</span>
+          <span className="tab-label-full">Side B: Nutritionist Dashboard</span>
+          <span className="tab-label-short">Dashboard</span>
         </button>
       </nav>
 
@@ -49,8 +51,11 @@ export default function Navbar({ activeView, setActiveView }) {
           }
         >
           <span className={`db-dot ${isSupabaseConfigured ? "supabase" : "local"}`}></span>
-          <span className="db-label">
+          <span className="db-label db-label-full">
             {isSupabaseConfigured ? "Supabase PostgreSQL" : "Connecting Supabase..."}
+          </span>
+          <span className="db-label db-label-short">
+            {isSupabaseConfigured ? "Supabase" : "Connecting..."}
           </span>
         </div>
       </div>
