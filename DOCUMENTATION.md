@@ -114,4 +114,7 @@ Open **`http://localhost:5173`** in your browser. The app runs immediately with 
 ```bash
 npm run build
 ```
+Live Production URL: **https://kayro-appointments.vercel.app**
+GitHub Repository: **https://github.com/SK-A73/Kayro-AI-Nutritionist-Booking-App**
+
 Deploy directly by importing the GitHub repository into Vercel. `vercel.json` is configured for zero-config Vite deployments.

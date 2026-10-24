@@ -335,7 +335,7 @@ def create_documentation_pdf(output_path):
     story.append(Paragraph("<b>Optional Supabase PostgreSQL Connection:</b>", s["h2"]))
     story.append(Paragraph("Run <code>supabase-schema.sql</code> in the Supabase SQL editor, then populate <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> in <code>.env</code>. The top indicator will display <b>Supabase Live</b>.", s["body"]))
     story.append(Paragraph("<b>Production Build & Deployment:</b>", s["h2"]))
-    story.append(Paragraph("Execute <code>npm run build</code>. Configured with <code>vercel.json</code> for instant zero-configuration deployment on Vercel.", s["body"]))
+    story.append(Paragraph("Live Production URL: <b>https://kayro-appointments.vercel.app</b><br/>GitHub: <b>https://github.com/SK-A73/Kayro-AI-Nutritionist-Booking-App</b><br/>Configured with <code>vercel.json</code> for instant zero-configuration deployment on Vercel.", s["body"]))
 
     doc.build(story, canvasmaker=NumberedCanvas)
     print(f"Generated: {output_path}")

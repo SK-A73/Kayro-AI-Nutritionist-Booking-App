@@ -11,6 +11,8 @@
 
 ## 🌟 Live Demo & Assessment Review Mode
 
+- **Live Production URL:** [https://kayro-appointments.vercel.app](https://kayro-appointments.vercel.app)
+- **GitHub Repository:** [https://github.com/SK-A73/Kayro-AI-Nutritionist-Booking-App](https://github.com/SK-A73/Kayro-AI-Nutritionist-Booking-App)
 - **Reviewer Friendly:** No authentication or login required!
 - **Two Interfaces in One Web App:** Instantly toggle between:
   - **Side A: Client App** (A mobile-first, calming wellness booking flow)
