@@ -326,7 +326,7 @@ def create_documentation_pdf(output_path):
     story.append(Paragraph("• <b>Default Template CSS Conflict:</b> Vite's default <code>index.css</code> injected <code>#root { text-align: center; border-inline: ... }</code>, disrupting alignments. Caught during visual inspection and replaced with a clean design token system.", s["bullet"]))
     story.append(Paragraph("• <b>Omitted Reschedule & Cancel Capabilities:</b> The starter code lacked rescheduling and cancellation logic. Built dedicated modals with conflict prevention.", s["bullet"]))
     story.append(Paragraph("• <b>Lexicographical Date Sorting Glitch:</b> Comparing mixed date strings produced incorrect chronological ordering. Standardized all comparisons to ISO <code>YYYY-MM-DD</code>.", s["bullet"]))
-    story.append(Paragraph("• <b>Client Journey Data Bleed:</b> Initial filtering showed all practice appointments under the client view when no name was matched. Resolved by scoping records strictly to the active profile.", s["bullet"]))
+    story.append(Paragraph("• <b>Client Side Sync & Profile Hardcoding Bug:</b> The initial client interface hardcoded 4 static names and filtered by a single client, hiding any new appointments created in Side B. Resolved by deriving client profiles dynamically from Supabase and adding an 'All Practice Visits' mode so any appointment created on either side synchronizes in real time.", s["bullet"]))
 
     # Heading 6
     story.append(Paragraph("6. How to Run It", s["h1"]))

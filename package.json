@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "npm --prefix kayro-appointments run dev",
     "build": "npm --prefix kayro-appointments run build",
-    "preview": "npm --prefix kayro-appointments run preview"
+    "preview": "npm --prefix kayro-appointments run preview",
+    "test:sync": "node run_acceptance_test.js"
   }
 }
