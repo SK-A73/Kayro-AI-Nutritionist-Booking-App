@@ -685,29 +685,12 @@
   grid-column: 1 / -1;
 }
 
-.input-with-icon {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.input-icon {
-  position: absolute;
-  left: 12px;
-  color: #798a7e;
-  pointer-events: none;
-}
-
-.input-with-icon input {
-  padding-left: 36px;
-}
-
 input[type="text"],
 input[type="tel"],
 input[type="date"],
 select {
   width: 100%;
-  padding: 11px 12px;
+  padding: 11px 14px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-sm);
   background: #fdfdfb;
@@ -715,12 +698,52 @@ select {
   color: var(--primary-deep);
   outline: none;
   transition: all 0.2s ease;
+  box-sizing: border-box;
 }
 
 input:focus,
 select:focus {
   border-color: var(--primary-forest);
   box-shadow: 0 0 0 3px rgba(40, 78, 60, 0.12);
+}
+
+.input-with-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.input-with-icon .input-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #798a7e;
+  pointer-events: none;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.input-with-icon input,
+.input-with-icon input[type="text"],
+.input-with-icon input[type="tel"],
+.input-with-icon input[type="date"] {
+  padding-left: 42px !important;
+  width: 100%;
+}
+
+.input-with-icon input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.65;
+  transition: opacity 0.15s ease;
+  padding: 4px;
+}
+
+.input-with-icon input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
 }
 
 .form-section {
