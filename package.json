@@ -1,0 +1,11 @@
+{
+  "name": "kayro-appointments-root",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Kayro Wellness Practice Appointments System",
+  "scripts": {
+    "dev": "npm --prefix kayro-appointments run dev",
+    "build": "npm --prefix kayro-appointments run build",
+    "preview": "npm --prefix kayro-appointments run preview"
+  }
+}

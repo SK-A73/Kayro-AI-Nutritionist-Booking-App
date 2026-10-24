@@ -1,0 +1,5 @@
+{
+  "buildCommand": "cd kayro-appointments && npm install && npm run build",
+  "outputDirectory": "kayro-appointments/dist",
+  "framework": "vite"
+}

@@ -1,0 +1,98 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&display=swap');
+
+:root {
+  /* Warm cream wellness palette */
+  --bg-warm-canvas: #fbf9f4;
+  --bg-card: #ffffff;
+  --bg-subtle: #f3efe6;
+  --bg-subtle-hover: #eae4d7;
+  
+  /* Primary forest greens */
+  --primary-deep: #1e3d2f;
+  --primary-forest: #284e3c;
+  --primary-hover: #173327;
+  --primary-light: #e8efe9;
+  
+  /* Sage accents */
+  --sage-accent: #5e7e6b;
+  --sage-light: #eff4f0;
+  --sage-border: #d4ded7;
+
+  /* Terracotta / warm accents */
+  --terracotta: #c87a53;
+  --terracotta-light: #fbeee7;
+  --terracotta-hover: #b46842;
+
+  /* Status Colors */
+  --status-booked-bg: #eaf5ee;
+  --status-booked-text: #24683e;
+  --status-booked-border: #c8e7d2;
+
+  --status-done-bg: #ebf2fa;
+  --status-done-text: #2b5687;
+  --status-done-border: #cadcf2;
+
+  --status-noshow-bg: #fdf0ed;
+  --status-noshow-text: #ba4736;
+  --status-noshow-border: #f8cfc8;
+
+  --status-cancel-bg: #f2f3f4;
+  --status-cancel-text: #6b7280;
+  --status-cancel-border: #e2e4e7;
+
+  /* Typography */
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* Borders & Shadows */
+  --border-subtle: #eae5dc;
+  --border-strong: #dcd6cb;
+  --shadow-sm: 0 2px 6px rgba(30, 61, 47, 0.04);
+  --shadow-md: 0 8px 24px rgba(30, 61, 47, 0.06);
+  --shadow-lg: 0 16px 36px rgba(30, 61, 47, 0.09);
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  background-color: var(--bg-warm-canvas);
+  color: var(--primary-deep);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  transition: all 0.18s ease-in-out;
+}
+
+input, select, textarea {
+  font-family: inherit;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
