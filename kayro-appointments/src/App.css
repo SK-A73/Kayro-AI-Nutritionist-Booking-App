@@ -1844,3 +1844,60 @@ select:focus {
     justify-content: space-between;
   }
 }
+
+/* Pill count & DB error banner */
+.pill-count {
+  font-size: 10px;
+  background: rgba(0, 0, 0, 0.08);
+  padding: 1px 5px;
+  border-radius: 999px;
+  margin-left: 4px;
+}
+
+.client-pill.active .pill-count {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+.db-error-alert {
+  max-width: 1200px;
+  margin: 16px auto 0;
+  padding: 14px 20px;
+  background: #fdf2f0;
+  border: 1px solid #f9ccc6;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  color: #ba4736;
+}
+
+.db-error-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.db-error-content p {
+  font-size: 12px;
+  color: #8c3224;
+  margin-top: 2px;
+}
+
+.retry-db-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: #ba4736;
+  color: #ffffff;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.retry-db-button:hover {
+  background: #9d3929;
+}

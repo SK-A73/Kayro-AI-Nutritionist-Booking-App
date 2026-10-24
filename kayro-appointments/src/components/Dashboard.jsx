@@ -38,6 +38,7 @@ export default function Dashboard({
   appointments,
   onRefresh,
   onOpenReschedule,
+  onClientCreated,
 }) {
   const todayStr = "2026-10-24"; // Practice today anchor matching assignment context
 
@@ -153,7 +154,7 @@ export default function Dashboard({
 
     setIsAdding(true);
     try {
-      await createAppointment({
+      const created = await createAppointment({
         client_name: manualForm.name.trim(),
         client_phone: manualForm.phone.trim(),
         appointment_date: normDate,
@@ -164,7 +165,8 @@ export default function Dashboard({
         is_confirmed: false,
       });
 
-      setManualSuccess("Appointment successfully scheduled!");
+      setManualSuccess("Appointment successfully scheduled in Supabase!");
+      const clientName = manualForm.name.trim();
       setManualForm({
         name: "",
         phone: "",
@@ -173,7 +175,10 @@ export default function Dashboard({
         focus: "General Nutrition Checkup",
         notes: "",
       });
-      onRefresh();
+      if (onClientCreated) {
+        onClientCreated(clientName);
+      }
+      await onRefresh();
       setTimeout(() => setManualSuccess(""), 4000);
     } catch (err) {
       setManualError(err.message || "Failed to add appointment.");

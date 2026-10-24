@@ -1,49 +1,31 @@
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
 import {
-  SAMPLE_APPOINTMENTS,
   normalizeDate,
   normalizeTime,
+  formatDisplayDate,
 } from "../data/initialData";
 
-const STORAGE_KEY = "kayro_appointments_v1";
-const SYNC_EVENT = "kayro:appointments_changed";
-
 /**
- * Initialize or get local storage appointments
+ * Cleanly format database record from Supabase PostgreSQL
  */
-function getLocalAppointments() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(SAMPLE_APPOINTMENTS));
-      return SAMPLE_APPOINTMENTS;
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0
-      ? parsed
-      : SAMPLE_APPOINTMENTS;
-  } catch (err) {
-    console.warn("Error reading localStorage, using initial sample data:", err);
-    return SAMPLE_APPOINTMENTS;
-  }
+export function formatAppointmentRecord(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    id: String(row.id),
+    appointment_date: normalizeDate(row.appointment_date),
+    appointment_time: normalizeTime(row.appointment_time),
+    is_confirmed: Boolean(row.is_confirmed),
+    client_name: row.client_name ? String(row.client_name).trim() : "Unknown Client",
+    client_phone: row.client_phone ? String(row.client_phone).trim() : "",
+    consultation_focus: row.consultation_focus || "General Nutrition Checkup",
+    notes: row.notes || "",
+    status: row.status || "Booked",
+  };
 }
 
 /**
- * Save appointments to local storage and broadcast to other tabs/listeners
- */
-function saveLocalAppointments(appointments) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(appointments));
-    window.dispatchEvent(
-      new CustomEvent(SYNC_EVENT, { detail: appointments })
-    );
-  } catch (err) {
-    console.error("Error saving to localStorage:", err);
-  }
-}
-
-/**
- * Check if a slot is already booked
+ * Check if a slot is already booked in an array of appointments
  */
 export function checkSlotConflict(appointments, date, time, excludeId = null) {
   const normDate = normalizeDate(date);
@@ -60,148 +42,157 @@ export function checkSlotConflict(appointments, date, time, excludeId = null) {
 }
 
 /**
- * Fetch all appointments from Supabase (if configured) or localStorage fallback
+ * Fetch all appointments from Supabase PostgreSQL (Single source of truth)
  */
 export async function fetchAppointments() {
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const { data, error } = await supabase
-        .from("appointments")
-        .select("*")
-        .order("appointment_date", { ascending: true })
-        .order("appointment_time", { ascending: true });
-
-      if (error) {
-        console.warn("Supabase query failed, falling back to local storage:", error.message);
-        return getLocalAppointments();
-      }
-
-      if (data && data.length > 0) {
-        // Cache to local storage
-        saveLocalAppointments(data);
-        return data;
-      } else {
-        // If Supabase table is empty, seed it with sample data
-        for (const item of SAMPLE_APPOINTMENTS) {
-          const { id, ...cleanItem } = item;
-          await supabase.from("appointments").insert(cleanItem);
-        }
-        return SAMPLE_APPOINTMENTS;
-      }
-    } catch (err) {
-      console.warn("Supabase connection exception:", err);
-      return getLocalAppointments();
-    }
+  if (!isSupabaseConfigured || !supabase) {
+    throw new Error(
+      "Supabase connection is not configured. Please provide VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY."
+    );
   }
 
-  return getLocalAppointments();
+  const { data, error } = await supabase
+    .from("appointments")
+    .select("*")
+    .order("appointment_date", { ascending: true })
+    .order("appointment_time", { ascending: true });
+
+  if (error) {
+    console.error("Supabase fetch error:", error);
+    throw new Error(error.message || "Failed to load appointments from Supabase.");
+  }
+
+  return (data || []).map(formatAppointmentRecord);
 }
 
 /**
- * Create a new appointment
+ * Create a new appointment in Supabase
  */
 export async function createAppointment(appointment) {
-  const current = getLocalAppointments();
+  if (!isSupabaseConfigured || !supabase) {
+    throw new Error(
+      "Supabase is not configured. Cannot save appointment without live database."
+    );
+  }
+
   const normDate = normalizeDate(appointment.appointment_date);
   const normTime = normalizeTime(appointment.appointment_time);
 
-  if (checkSlotConflict(current, normDate, normTime)) {
-    throw new Error("This slot is already booked. Please choose another time.");
+  // 1. Conflict check in Supabase to strictly prevent double booking
+  const { data: conflicts, error: checkError } = await supabase
+    .from("appointments")
+    .select("id, client_name")
+    .eq("appointment_date", normDate)
+    .eq("appointment_time", normTime)
+    .eq("status", "Booked");
+
+  if (checkError) {
+    console.error("Supabase conflict check error:", checkError);
   }
 
-  const newAppointment = {
-    ...appointment,
-    id: `apt-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+  if (conflicts && conflicts.length > 0) {
+    throw new Error(
+      `The ${normTime} slot on ${formatDisplayDate(
+        normDate
+      )} is already booked. Please choose an alternative slot.`
+    );
+  }
+
+  // 2. Insert into Supabase appointments table
+  const payload = {
+    client_name: appointment.client_name.trim(),
+    client_phone: appointment.client_phone ? appointment.client_phone.trim() : "",
     appointment_date: normDate,
     appointment_time: normTime,
     status: appointment.status || "Booked",
     is_confirmed: Boolean(appointment.is_confirmed),
     consultation_focus: appointment.consultation_focus || "General Nutrition Checkup",
-    created_at: new Date().toISOString(),
+    notes: appointment.notes ? appointment.notes.trim() : "",
   };
 
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const { id, ...payload } = newAppointment;
-      const { data, error } = await supabase
-        .from("appointments")
-        .insert([payload])
-        .select()
-        .single();
+  const { data, error } = await supabase
+    .from("appointments")
+    .insert([payload])
+    .select()
+    .single();
 
-      if (!error && data) {
-        const updated = [...current, data];
-        saveLocalAppointments(updated);
-        return data;
-      }
-    } catch (err) {
-      console.warn("Supabase insert failed, storing locally:", err);
-    }
+  if (error) {
+    console.error("Supabase insert error:", error);
+    throw new Error(error.message || "Failed to create appointment in Supabase.");
   }
 
-  const updated = [...current, newAppointment];
-  saveLocalAppointments(updated);
-  return newAppointment;
+  return formatAppointmentRecord(data);
 }
 
 /**
- * Update an appointment (e.g. status, reschedule date/time, attendance confirmation)
+ * Update appointment in Supabase
  */
 export async function updateAppointment(id, updates) {
-  const current = getLocalAppointments();
+  if (!isSupabaseConfigured || !supabase) {
+    throw new Error("Supabase is not configured.");
+  }
 
-  // If date or time changed, check conflict
-  if (updates.appointment_date || updates.appointment_time) {
-    const existing = current.find((a) => String(a.id) === String(id));
-    const targetDate = updates.appointment_date || existing?.appointment_date;
-    const targetTime = updates.appointment_time || existing?.appointment_time;
+  const payload = { ...updates };
+  if (payload.appointment_date) {
+    payload.appointment_date = normalizeDate(payload.appointment_date);
+  }
+  if (payload.appointment_time) {
+    payload.appointment_time = normalizeTime(payload.appointment_time);
+  }
 
-    if (checkSlotConflict(current, targetDate, targetTime, id)) {
-      throw new Error("Selected time slot is already reserved. Please choose another slot.");
+  // If rescheduling (date or time changed), verify no conflict in Supabase
+  if (payload.appointment_date || payload.appointment_time) {
+    const { data: currentApt } = await supabase
+      .from("appointments")
+      .select("appointment_date, appointment_time")
+      .eq("id", id)
+      .single();
+
+    const targetDate = payload.appointment_date || currentApt?.appointment_date;
+    const targetTime = payload.appointment_time || currentApt?.appointment_time;
+
+    const { data: conflicts } = await supabase
+      .from("appointments")
+      .select("id")
+      .eq("appointment_date", targetDate)
+      .eq("appointment_time", targetTime)
+      .eq("status", "Booked")
+      .neq("id", id);
+
+    if (conflicts && conflicts.length > 0) {
+      throw new Error("That slot is already booked. Please choose another slot.");
     }
   }
 
-  if (updates.appointment_date) {
-    updates.appointment_date = normalizeDate(updates.appointment_date);
-  }
-  if (updates.appointment_time) {
-    updates.appointment_time = normalizeTime(updates.appointment_time);
-  }
+  const { data, error } = await supabase
+    .from("appointments")
+    .update(payload)
+    .eq("id", id)
+    .select()
+    .single();
 
-  const updatedList = current.map((item) =>
-    String(item.id) === String(id) ? { ...item, ...updates } : item
-  );
-  saveLocalAppointments(updatedList);
-
-  if (isSupabaseConfigured && supabase) {
-    try {
-      // If id is numeric in Supabase or UUID
-      await supabase
-        .from("appointments")
-        .update(updates)
-        .eq("id", id);
-    } catch (err) {
-      console.warn("Supabase update error:", err);
-    }
+  if (error) {
+    console.error("Supabase update error:", error);
+    throw new Error(error.message || "Failed to update appointment in Supabase.");
   }
 
-  return updatedList.find((a) => String(a.id) === String(id));
+  return formatAppointmentRecord(data);
 }
 
 /**
- * Reschedule appointment to a new date and time
+ * Reschedule appointment to a new date and time in Supabase
  */
 export async function rescheduleAppointment(id, newDate, newTime) {
   return updateAppointment(id, {
     appointment_date: newDate,
     appointment_time: newTime,
-    is_confirmed: false, // Reset confirmation so client confirms new time
+    is_confirmed: false, // Reset confirmation so client can re-confirm new slot
     status: "Booked",
   });
 }
 
 /**
- * Cancel an appointment
+ * Cancel an appointment in Supabase
  */
 export async function cancelAppointment(id) {
   return updateAppointment(id, {
@@ -210,7 +201,7 @@ export async function cancelAppointment(id) {
 }
 
 /**
- * Confirm attendance (1-tap no-show solution)
+ * Confirm attendance in Supabase (1-tap no-show solution)
  */
 export async function confirmAttendance(id) {
   return updateAppointment(id, {
@@ -219,72 +210,128 @@ export async function confirmAttendance(id) {
 }
 
 /**
- * Reset data back to assignment sample data
+ * Reset data back to assignment sample data in Supabase
  */
 export async function resetToSampleData() {
-  saveLocalAppointments(SAMPLE_APPOINTMENTS);
-  if (isSupabaseConfigured && supabase) {
-    try {
-      await supabase.from("appointments").delete().neq("id", 0);
-      for (const item of SAMPLE_APPOINTMENTS) {
-        const { id, ...cleanItem } = item;
-        await supabase.from("appointments").insert(cleanItem);
-      }
-    } catch (err) {
-      console.warn("Supabase reset failed:", err);
-    }
+  if (!isSupabaseConfigured || !supabase) {
+    throw new Error("Supabase is not configured.");
   }
-  return SAMPLE_APPOINTMENTS;
+
+  // Clear existing
+  const { error: delError } = await supabase
+    .from("appointments")
+    .delete()
+    .neq("id", 0);
+
+  if (delError) {
+    console.warn("Error clearing Supabase appointments:", delError);
+  }
+
+  // Seed sample data
+  const sampleItems = [
+    {
+      client_name: "Riya Shah",
+      client_phone: "98200 11111",
+      appointment_date: "2026-10-24",
+      appointment_time: "10:00",
+      status: "Booked",
+      is_confirmed: true,
+      consultation_focus: "Gut Health & Digestion",
+      notes: "Follow-up on low-FODMAP meal plan. Client confirmed attendance via 1-tap nudge.",
+    },
+    {
+      client_name: "Arjun Mehta",
+      client_phone: "98200 22222",
+      appointment_date: "2026-10-24",
+      appointment_time: "11:30",
+      status: "Booked",
+      is_confirmed: false,
+      consultation_focus: "Sports Nutrition & Energy",
+      notes: "Pre-marathon carb-loading strategy and hydration schedule.",
+    },
+    {
+      client_name: "Riya Shah",
+      client_phone: "98200 11111",
+      appointment_date: "2026-10-25",
+      appointment_time: "16:00",
+      status: "Booked",
+      is_confirmed: false,
+      consultation_focus: "Gut Health & Digestion",
+      notes: "Secondary review session to evaluate symptom journal.",
+    },
+    {
+      client_name: "Meera Iyer",
+      client_phone: "",
+      appointment_date: "2026-10-23",
+      appointment_time: "09:00",
+      status: "Done",
+      is_confirmed: true,
+      consultation_focus: "PCOS & Hormonal Nutrition",
+      notes: "Initial consultation completed. Shared blood work review & high protein recipe pack.",
+    },
+    {
+      client_name: "Kabir Rao",
+      client_phone: "98200 33333",
+      appointment_date: "2026-10-22",
+      appointment_time: "14:00",
+      status: "No-show",
+      is_confirmed: false,
+      consultation_focus: "Holistic Weight Wellness",
+      notes: "Did not attend consultation. No prior message received.",
+    },
+  ];
+
+  const { data, error } = await supabase
+    .from("appointments")
+    .insert(sampleItems)
+    .select();
+
+  if (error) {
+    throw new Error(error.message || "Failed to reset sample data in Supabase.");
+  }
+
+  return (data || []).map(formatAppointmentRecord);
 }
 
 /**
- * Real-time synchronization subscriber
+ * Real-time synchronization subscriber via Supabase Realtime + Focus listener + Polling fallback
  */
 export function subscribeToAppointments(onUpdate) {
-  const handleCustomSync = (e) => {
-    if (e.detail) {
-      onUpdate(e.detail);
-    } else {
-      fetchAppointments().then(onUpdate);
-    }
-  };
+  if (!isSupabaseConfigured || !supabase) return () => {};
 
-  const handleStorageSync = (e) => {
-    if (e.key === STORAGE_KEY && e.newValue) {
-      try {
-        onUpdate(JSON.parse(e.newValue));
-      } catch {
-        fetchAppointments().then(onUpdate);
-      }
-    }
-  };
-
-  window.addEventListener(SYNC_EVENT, handleCustomSync);
-  window.addEventListener("storage", handleStorageSync);
-
-  let supabaseChannel = null;
-  if (isSupabaseConfigured && supabase) {
-    try {
-      supabaseChannel = supabase
-        .channel("public:appointments")
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "appointments" },
-          () => {
-            fetchAppointments().then(onUpdate);
-          }
-        )
-        .subscribe();
-    } catch (e) {
-      console.warn("Supabase realtime subscription failed:", e);
-    }
+  // 1. Supabase Realtime Channel
+  let channel = null;
+  try {
+    channel = supabase
+      .channel("public:appointments_realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "appointments" },
+        () => {
+          fetchAppointments().then(onUpdate).catch(console.error);
+        }
+      )
+      .subscribe();
+  } catch (err) {
+    console.warn("Supabase realtime subscription failed:", err);
   }
 
+  // 2. Refetch on Window Focus (instant synchronization when switching tabs or browser windows)
+  const handleFocus = () => {
+    fetchAppointments().then(onUpdate).catch(() => {});
+  };
+  window.addEventListener("focus", handleFocus);
+
+  // 3. Polling interval every 4 seconds to guarantee sync even across devices
+  const pollInterval = setInterval(() => {
+    fetchAppointments().then(onUpdate).catch(() => {});
+  }, 4000);
+
   return () => {
-    window.removeEventListener(SYNC_EVENT, handleCustomSync);
-    window.removeEventListener("storage", handleStorageSync);
-    if (supabaseChannel) {
-      supabase.removeChannel(supabaseChannel);
+    if (channel) {
+      supabase.removeChannel(channel);
     }
+    window.removeEventListener("focus", handleFocus);
+    clearInterval(pollInterval);
   };
 }

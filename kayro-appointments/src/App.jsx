@@ -11,25 +11,32 @@ import {
   subscribeToAppointments,
 } from "./services/appointmentService";
 import { isSupabaseConfigured } from "./lib/supabase";
+import { AlertCircle, RefreshCw } from "lucide-react";
 import "./App.css";
 
 export default function App() {
   const [activeView, setActiveView] = useState("client"); // "client" | "dashboard"
   const [appointments, setAppointments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedClient, setSelectedClient] = useState("Riya Shah");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [selectedClient, setSelectedClient] = useState("all");
 
   // Modals
   const [rescheduleTarget, setRescheduleTarget] = useState(null);
   const [cancelTarget, setCancelTarget] = useState(null);
 
-  // Load appointments
+  // Load appointments directly from Supabase
   const loadData = useCallback(async () => {
     try {
+      setErrorMessage("");
       const data = await fetchAppointments();
-      setAppointments(data);
+      setAppointments(data || []);
     } catch (err) {
       console.error("Failed to load appointments:", err);
+      setErrorMessage(
+        err.message ||
+          "Unable to load appointments from Supabase. Please verify connection."
+      );
     } finally {
       setIsLoading(false);
     }
@@ -38,9 +45,11 @@ export default function App() {
   useEffect(() => {
     loadData();
 
-    // Subscribe to cross-tab / Supabase realtime updates
+    // Subscribe to live Supabase Realtime changes + tab focus + periodic sync
     const unsubscribe = subscribeToAppointments((updated) => {
-      setAppointments(updated);
+      if (Array.isArray(updated)) {
+        setAppointments(updated);
+      }
     });
 
     return () => unsubscribe();
@@ -68,12 +77,33 @@ export default function App() {
         setSelectedClient={setSelectedClient}
       />
 
+      {/* Database Error Banner if Supabase fails */}
+      {errorMessage && (
+        <div className="db-error-alert" role="alert">
+          <div className="db-error-content">
+            <AlertCircle size={18} />
+            <div>
+              <strong>Database Connection Notice:</strong>
+              <p>{errorMessage}</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className="retry-db-button"
+            onClick={loadData}
+          >
+            <RefreshCw size={14} />
+            <span>Retry Connection</span>
+          </button>
+        </div>
+      )}
+
       {/* Main Interface Content */}
       <main className="main-content-container">
         {isLoading ? (
           <div className="loading-state-shell">
             <div className="spinner-leaf">🍃</div>
-            <p>Loading Kayro Wellness Practice...</p>
+            <p>Loading appointments from Supabase...</p>
           </div>
         ) : activeView === "client" ? (
           <ClientApp
@@ -89,6 +119,12 @@ export default function App() {
             appointments={appointments}
             onRefresh={loadData}
             onOpenReschedule={(apt) => setRescheduleTarget(apt)}
+            onClientCreated={(clientName) => {
+              if (clientName) {
+                setSelectedClient(clientName);
+              }
+              loadData();
+            }}
           />
         )}
       </main>
@@ -108,7 +144,7 @@ export default function App() {
           </div>
           <div className="footer-meta">
             <span className="footer-tech">
-              React + Vite · {isSupabaseConfigured ? "Supabase PostgreSQL" : "Local Demo Storage"}
+              React 19 + Vite · {isSupabaseConfigured ? "Supabase PostgreSQL (Live)" : "Supabase Connection Required"}
             </span>
           </div>
         </div>

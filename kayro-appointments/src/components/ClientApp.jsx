@@ -11,10 +11,9 @@ import {
   RefreshCw,
   XCircle,
   HeartHandshake,
-  MessageCircle,
-  HelpCircle,
   AlertCircle,
   ArrowRight,
+  Globe,
 } from "lucide-react";
 import {
   AVAILABLE_SLOTS,
@@ -36,19 +35,19 @@ import {
 } from "../utils/calendarAndWhatsapp";
 
 export default function ClientApp({
-  appointments,
+  appointments = [],
   onRefresh,
   onOpenReschedule,
   onOpenCancel,
-  selectedClient,
+  selectedClient = "all",
   setSelectedClient,
 }) {
   const todayStr = new Date().toISOString().split("T")[0];
 
   // Booking Form State
   const [formData, setFormData] = useState({
-    name: selectedClient || "Riya Shah",
-    phone: selectedClient === "Riya Shah" ? "98200 11111" : "",
+    name: selectedClient && selectedClient !== "all" ? selectedClient : "",
+    phone: "",
     date: "2026-10-26",
     time: "10:00",
     focus: "Gut Health & Digestion",
@@ -60,43 +59,67 @@ export default function ClientApp({
   const [justBooked, setJustBooked] = useState(null);
   const [clientTab, setClientTab] = useState("upcoming");
 
-  // Get unique clients for reviewer quick-switch
+  // Dynamically derive client profiles from live Supabase appointments
   const clientProfiles = useMemo(() => {
-    const list = [
-      { name: "Riya Shah", phone: "98200 11111", desc: "Existing client with 2 upcoming visits" },
-      { name: "Arjun Mehta", phone: "98200 22222", desc: "Booked consultation on Oct 24" },
-      { name: "Meera Iyer", phone: "", desc: "Completed past consultation" },
-      { name: "Kabir Rao", phone: "98200 33333", desc: "Marked as past no-show" },
-    ];
-    return list;
-  }, []);
+    const clientMap = new Map();
+
+    // Default base clients from initial data
+    const defaults = ["Riya Shah", "Arjun Mehta", "Meera Iyer", "Kabir Rao"];
+    defaults.forEach((name) => {
+      clientMap.set(name.toLowerCase(), {
+        name,
+        phone: "",
+        count: 0,
+      });
+    });
+
+    // Merge in all actual clients from Supabase
+    appointments.forEach((apt) => {
+      const rawName = apt.client_name?.trim();
+      if (!rawName) return;
+      const key = rawName.toLowerCase();
+      if (clientMap.has(key)) {
+        const item = clientMap.get(key);
+        item.count += 1;
+        if (!item.phone && apt.client_phone) item.phone = apt.client_phone;
+      } else {
+        clientMap.set(key, {
+          name: rawName,
+          phone: apt.client_phone || "",
+          count: 1,
+        });
+      }
+    });
+
+    return Array.from(clientMap.values());
+  }, [appointments]);
 
   const handleSelectClient = (profile) => {
     setSelectedClient(profile.name);
     setFormData((prev) => ({
       ...prev,
       name: profile.name,
-      phone: profile.phone || "",
+      phone: profile.phone || prev.phone,
     }));
     setJustBooked(null);
     setFormError("");
   };
 
-  // Filter client's appointments
+  // Filter client's appointments based on selected client or "all"
   const clientAppointments = useMemo(() => {
-    if (!selectedClient) return [];
+    if (!selectedClient || selectedClient.toLowerCase() === "all") {
+      return appointments;
+    }
     return appointments.filter(
       (a) =>
-        a.client_name.trim().toLowerCase() ===
+        a.client_name?.trim().toLowerCase() ===
         selectedClient.trim().toLowerCase()
     );
   }, [appointments, selectedClient]);
 
-  // Next upcoming appointment for this client
+  // Next upcoming appointment
   const nextAppointment = useMemo(() => {
-    const upcoming = clientAppointments.filter(
-      (a) => a.status === "Booked" && a.appointment_date >= "2026-10-23"
-    );
+    const upcoming = clientAppointments.filter((a) => a.status === "Booked");
     upcoming.sort((a, b) =>
       `${a.appointment_date} ${a.appointment_time}`.localeCompare(
         `${b.appointment_date} ${b.appointment_time}`
@@ -105,11 +128,31 @@ export default function ClientApp({
     return upcoming[0] || null;
   }, [clientAppointments]);
 
-  // Past appointments
-  const pastAppointments = useMemo(() => {
-    return clientAppointments.filter(
-      (a) => a.status === "Done" || a.status === "No-show" || a.status === "Cancelled" || a.appointment_date < "2026-10-23"
-    );
+  // Upcoming appointments list
+  const upcomingAppointmentsList = useMemo(() => {
+    return clientAppointments
+      .filter((a) => a.status === "Booked")
+      .sort((a, b) =>
+        `${a.appointment_date} ${a.appointment_time}`.localeCompare(
+          `${b.appointment_date} ${b.appointment_time}`
+        )
+      );
+  }, [clientAppointments]);
+
+  // Past appointments list
+  const pastAppointmentsList = useMemo(() => {
+    return clientAppointments
+      .filter(
+        (a) =>
+          a.status === "Done" ||
+          a.status === "No-show" ||
+          a.status === "Cancelled"
+      )
+      .sort((a, b) =>
+        `${b.appointment_date} ${b.appointment_time}`.localeCompare(
+          `${a.appointment_date} ${a.appointment_time}`
+        )
+      );
   }, [clientAppointments]);
 
   // Handle form change
@@ -127,9 +170,9 @@ export default function ClientApp({
   const handleConfirmAttendance = async (id) => {
     try {
       await confirmAttendance(id);
-      onRefresh();
+      await onRefresh();
     } catch (err) {
-      console.error(err);
+      console.error("Attendance confirmation error:", err);
     }
   };
 
@@ -187,7 +230,7 @@ export default function ClientApp({
 
       setJustBooked(created);
       setSelectedClient(formData.name.trim());
-      onRefresh();
+      await onRefresh();
     } catch (err) {
       setFormError(err.message || "Failed to schedule appointment.");
     } finally {
@@ -195,28 +238,50 @@ export default function ClientApp({
     }
   };
 
+  const isAllView = !selectedClient || selectedClient.toLowerCase() === "all";
+
   return (
     <div className="client-app-shell">
-      {/* Reviewer Quick-Switch Bar */}
+      {/* Reviewer / Active Client Selector Bar */}
       <section className="reviewer-context-bar" aria-label="Reviewer Client Selector">
         <div className="reviewer-bar-inner">
           <span className="reviewer-label">
-            <User size={14} /> Reviewer Demo Client:
+            <User size={14} /> Active Client View:
           </span>
           <div className="client-pills">
-            {clientProfiles.map((profile) => (
-              <button
-                key={profile.name}
-                type="button"
-                className={`client-pill ${
-                  selectedClient === profile.name ? "active" : ""
-                }`}
-                onClick={() => handleSelectClient(profile)}
-              >
-                <span>{profile.name}</span>
-                {selectedClient === profile.name && <CheckCircle2 size={12} />}
-              </button>
-            ))}
+            <button
+              type="button"
+              className={`client-pill ${isAllView ? "active" : ""}`}
+              onClick={() => {
+                setSelectedClient("all");
+                setJustBooked(null);
+                setFormError("");
+              }}
+            >
+              <Globe size={13} />
+              <span>All Practice Visits ({appointments.length})</span>
+              {isAllView && <CheckCircle2 size={12} />}
+            </button>
+
+            {clientProfiles.map((profile) => {
+              const isSelected =
+                !isAllView &&
+                selectedClient.toLowerCase() === profile.name.toLowerCase();
+              return (
+                <button
+                  key={profile.name}
+                  type="button"
+                  className={`client-pill ${isSelected ? "active" : ""}`}
+                  onClick={() => handleSelectClient(profile)}
+                >
+                  <span>{profile.name}</span>
+                  {profile.count > 0 && (
+                    <span className="pill-count">({profile.count})</span>
+                  )}
+                  {isSelected && <CheckCircle2 size={12} />}
+                </button>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -231,7 +296,9 @@ export default function ClientApp({
           Wellness starts with<br />showing up for yourself.
         </h1>
         <p className="hero-subtitle">
-          Welcome, {selectedClient || "friend"}. Calm, evidence-based nutrition consultations designed around your life.
+          {isAllView
+            ? "Practice-wide schedule synchronized in real time with the Nutritionist Dashboard."
+            : `Viewing consultations for ${selectedClient}. Calm, evidence-based nutrition care designed around your life.`}
         </p>
       </section>
 
@@ -240,7 +307,9 @@ export default function ClientApp({
         {/* Next Visit Spotlight */}
         <section className="client-spotlight-panel" aria-label="Next Visit">
           <div className="panel-badge-row">
-            <span className="panel-eyebrow">YOUR NEXT CONSULTATION</span>
+            <span className="panel-eyebrow">
+              {isAllView ? "NEXT UPCOMING PRACTICE CONSULTATION" : `NEXT VISIT FOR ${selectedClient.toUpperCase()}`}
+            </span>
             {nextAppointment?.is_confirmed && (
               <span className="attendance-pill confirmed">
                 ✓ Attendance Confirmed
@@ -250,8 +319,12 @@ export default function ClientApp({
 
           {nextAppointment ? (
             <div className="spotlight-content">
-              <h2 className="spotlight-title">You're making time for your health.</h2>
-              
+              <h2 className="spotlight-title">
+                {isAllView
+                  ? `Upcoming: ${nextAppointment.client_name}`
+                  : "You're making time for your health."}
+              </h2>
+
               <div className="spotlight-card">
                 <div className="spotlight-time-box">
                   <div className="calendar-tile">
@@ -268,7 +341,7 @@ export default function ClientApp({
                       {formatDisplayTime(nextAppointment.appointment_time)}
                     </strong>
                     <p className="spotlight-type">
-                      {nextAppointment.consultation_focus || "Holistic Nutrition Consultation"}
+                      {nextAppointment.client_name} · {nextAppointment.consultation_focus || "Holistic Nutrition"}
                     </p>
                     <p className="spotlight-doctor">
                       With Senior Clinical Nutritionist · 45 mins
@@ -276,12 +349,14 @@ export default function ClientApp({
                   </div>
                 </div>
 
-                {/* No-Show Prevention Feature #1: 1-Tap Attendance Confirmation */}
+                {/* 1-Tap Attendance Confirmation */}
                 {!nextAppointment.is_confirmed ? (
                   <div className="nudge-action-box">
                     <div className="nudge-text">
                       <strong>Can you still attend this session?</strong>
-                      <p>A quick confirmation helps our nutritionist prepare your personalized diet files.</p>
+                      <p>
+                        A quick confirmation gives our nutritionist peace of mind to prepare your personalized diet review.
+                      </p>
                     </div>
                     <div className="nudge-buttons">
                       <button
@@ -304,11 +379,11 @@ export default function ClientApp({
                 ) : (
                   <div className="confirmed-celebration-box">
                     <CheckCircle2 size={16} className="confirmed-icon" />
-                    <span>Your seat is reserved. We look forward to seeing you!</span>
+                    <span>Attendance confirmed. We look forward to seeing you!</span>
                   </div>
                 )}
 
-                {/* Calendar Sync & Modification Controls */}
+                {/* Calendar Sync & Controls */}
                 <div className="spotlight-controls">
                   <div className="calendar-dropdown-wrap">
                     <a
@@ -351,11 +426,10 @@ export default function ClientApp({
                 </div>
               </div>
 
-              {/* Mindful attendance note */}
               <div className="wellness-tip-card">
                 <HeartHandshake size={18} className="tip-icon" />
                 <p>
-                  <strong>Our Respect-Your-Time Promise:</strong> If your schedule changes, rescheduling takes 2 clicks and frees this slot for someone on our waitlist.
+                  <strong>Zero-Guilt Rescheduling:</strong> Rescheduling frees this slot for someone on our waitlist. No awkward phone calls required.
                 </p>
               </div>
             </div>
@@ -366,7 +440,9 @@ export default function ClientApp({
               </div>
               <h3>No upcoming visits scheduled</h3>
               <p>
-                Take the first step toward lasting wellness. Pick a convenient time on the right to reserve your consultation.
+                {isAllView
+                  ? "There are currently no active booked appointments. Reserve one using the form on the right!"
+                  : `No upcoming visits scheduled for ${selectedClient}. Choose a time to book a consultation.`}
               </p>
             </div>
           )}
@@ -376,24 +452,25 @@ export default function ClientApp({
         <section className="client-booking-panel" aria-label="Book a consultation">
           <div className="panel-badge-row">
             <span className="panel-eyebrow">RESERVE A SLOT</span>
-            <span className="slot-guarantee-pill">No Double Booking</span>
+            <span className="slot-guarantee-pill">Supabase Verified</span>
           </div>
           <h2 className="booking-title">Book a consultation</h2>
           <p className="booking-subtitle">
-            Choose your preferred date and slot. Instant confirmation.
+            Choose your preferred date and slot. Saves directly to Supabase.
           </p>
 
-          {/* Success Card if just booked */}
+          {/* Success Banner if just booked */}
           {justBooked && (
             <div className="booking-success-banner" role="status">
               <div className="success-icon">
                 <CheckCircle2 size={24} />
               </div>
               <div className="success-text">
-                <strong>Appointment Confirmed!</strong>
+                <strong>Appointment Confirmed & Saved to Supabase!</strong>
                 <p>
-                  We reserved <strong>{formatDisplayDate(justBooked.appointment_date)}</strong> at{" "}
-                  <strong>{formatDisplayTime(justBooked.appointment_time)}</strong> for {justBooked.client_name}.
+                  Reserved for <strong>{justBooked.client_name}</strong> on{" "}
+                  <strong>{formatDisplayDate(justBooked.appointment_date)}</strong> at{" "}
+                  <strong>{formatDisplayTime(justBooked.appointment_time)}</strong>.
                 </p>
                 <div className="success-calendar-row">
                   <a
@@ -428,7 +505,7 @@ export default function ClientApp({
                     name="name"
                     value={formData.name}
                     onChange={handleChange}
-                    placeholder="e.g. Riya Shah"
+                    placeholder="e.g. Ananya Rao"
                     required
                   />
                 </div>
@@ -443,7 +520,7 @@ export default function ClientApp({
                     name="phone"
                     value={formData.phone}
                     onChange={handleChange}
-                    placeholder="e.g. 98200 11111"
+                    placeholder="e.g. 98200 44444"
                     required
                   />
                 </div>
@@ -539,7 +616,7 @@ export default function ClientApp({
               className="button-primary-large"
               disabled={isBooking}
             >
-              <span>{isBooking ? "Securing slot..." : "Confirm My Consultation"}</span>
+              <span>{isBooking ? "Saving to Supabase..." : "Confirm My Consultation"}</span>
               <ArrowRight size={16} />
             </button>
           </form>
@@ -552,7 +629,9 @@ export default function ClientApp({
           <div>
             <span className="panel-eyebrow">YOUR WELLNESS LOG</span>
             <h2 className="journey-title">
-              Consultation history for {selectedClient || "You"}
+              {isAllView
+                ? `All Consultations (${appointments.length})`
+                : `Consultation history for ${selectedClient}`}
             </h2>
           </div>
 
@@ -562,92 +641,95 @@ export default function ClientApp({
               className={`journey-tab ${clientTab === "upcoming" ? "active" : ""}`}
               onClick={() => setClientTab("upcoming")}
             >
-              Upcoming ({clientAppointments.filter((a) => a.status === "Booked").length})
+              Upcoming ({upcomingAppointmentsList.length})
             </button>
             <button
               type="button"
               className={`journey-tab ${clientTab === "past" ? "active" : ""}`}
               onClick={() => setClientTab("past")}
             >
-              Past & Notes ({pastAppointments.length})
+              Past & Notes ({pastAppointmentsList.length})
             </button>
           </div>
         </div>
 
         <div className="appointment-card-list">
           {clientTab === "upcoming" ? (
-            clientAppointments.filter((a) => a.status === "Booked").length > 0 ? (
-              clientAppointments
-                .filter((a) => a.status === "Booked")
-                .map((apt) => (
-                  <div key={apt.id} className="appointment-journey-card">
-                    <div className="card-left">
-                      <div className="card-cal-pill">
-                        <span className="cal-day-num">
-                          {apt.appointment_date.split("-")[2]}
-                        </span>
-                        <span className="cal-month">
-                          {formatDisplayDate(apt.appointment_date).split(" ")[2]}
-                        </span>
-                      </div>
-                      <div className="card-info">
-                        <strong className="card-datetime">
-                          {formatDisplayDate(apt.appointment_date)} at{" "}
-                          {formatDisplayTime(apt.appointment_time)}
-                        </strong>
-                        <p className="card-focus">
-                          {apt.consultation_focus || "Nutrition Consultation"}
-                        </p>
-                        <div className="card-badges">
-                          <span className="status-badge booked">Booked</span>
-                          {apt.is_confirmed ? (
-                            <span className="confirmed-chip">
-                              ✓ Attendance Confirmed
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              className="confirm-link-chip"
-                              onClick={() => handleConfirmAttendance(apt.id)}
-                            >
-                              Tap to confirm attendance
-                            </button>
-                          )}
-                        </div>
-                      </div>
+            upcomingAppointmentsList.length > 0 ? (
+              upcomingAppointmentsList.map((apt) => (
+                <div key={apt.id} className="appointment-journey-card">
+                  <div className="card-left">
+                    <div className="card-cal-pill">
+                      <span className="cal-day-num">
+                        {apt.appointment_date.split("-")[2]}
+                      </span>
+                      <span className="cal-month">
+                        {formatDisplayDate(apt.appointment_date).split(" ")[2]}
+                      </span>
                     </div>
-
-                    <div className="card-actions">
-                      <button
-                        type="button"
-                        className="button-sm outline"
-                        onClick={() => onOpenReschedule(apt)}
-                      >
-                        <RefreshCw size={12} />
-                        <span>Reschedule</span>
-                      </button>
-                      <button
-                        type="button"
-                        className="button-sm danger-text"
-                        onClick={() => onOpenCancel(apt)}
-                      >
-                        Cancel
-                      </button>
+                    <div className="card-info">
+                      <strong className="card-datetime">
+                        {apt.client_name} · {formatDisplayDate(apt.appointment_date)} at{" "}
+                        {formatDisplayTime(apt.appointment_time)}
+                      </strong>
+                      <p className="card-focus">
+                        {apt.consultation_focus || "Nutrition Consultation"}
+                        {apt.client_phone && ` · ${formatPhoneDisplay(apt.client_phone)}`}
+                      </p>
+                      <div className="card-badges">
+                        <span className="status-badge booked">Booked</span>
+                        {apt.is_confirmed ? (
+                          <span className="confirmed-chip">
+                            ✓ Attendance Confirmed
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            className="confirm-link-chip"
+                            onClick={() => handleConfirmAttendance(apt.id)}
+                          >
+                            Tap to confirm attendance
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                ))
+
+                  <div className="card-actions">
+                    <button
+                      type="button"
+                      className="button-sm outline"
+                      onClick={() => onOpenReschedule(apt)}
+                    >
+                      <RefreshCw size={12} />
+                      <span>Reschedule</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="button-sm danger-text"
+                      onClick={() => onOpenCancel(apt)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ))
             ) : (
               <div className="empty-history-box">
-                <p>No upcoming consultations scheduled.</p>
+                <p>
+                  {isAllView
+                    ? "No upcoming consultations scheduled across the practice."
+                    : `No upcoming consultations scheduled for ${selectedClient}.`}
+                </p>
               </div>
             )
-          ) : pastAppointments.length > 0 ? (
-            pastAppointments.map((apt) => (
+          ) : pastAppointmentsList.length > 0 ? (
+            pastAppointmentsList.map((apt) => (
               <div key={apt.id} className="appointment-journey-card past">
                 <div className="card-left">
                   <div className="card-info">
                     <strong className="card-datetime">
-                      {formatDisplayDate(apt.appointment_date)} at{" "}
+                      {apt.client_name} · {formatDisplayDate(apt.appointment_date)} at{" "}
                       {formatDisplayTime(apt.appointment_time)}
                     </strong>
                     <p className="card-focus">
@@ -669,7 +751,11 @@ export default function ClientApp({
             ))
           ) : (
             <div className="empty-history-box">
-              <p>No past consultations on record for {selectedClient}.</p>
+              <p>
+                {isAllView
+                  ? "No past consultations on record."
+                  : `No past consultations on record for ${selectedClient}.`}
+              </p>
             </div>
           )}
         </div>

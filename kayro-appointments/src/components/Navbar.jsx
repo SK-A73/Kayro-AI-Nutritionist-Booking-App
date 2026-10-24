@@ -1,8 +1,8 @@
 import React from "react";
-import { Sparkles, CalendarCheck, ShieldCheck, Database } from "lucide-react";
+import { CalendarCheck, ShieldCheck } from "lucide-react";
 import { isSupabaseConfigured } from "../lib/supabase";
 
-export default function Navbar({ activeView, setActiveView, selectedClient, setSelectedClient, clientNames }) {
+export default function Navbar({ activeView, setActiveView }) {
   return (
     <header className="topbar">
       <div className="brand-wrap">
@@ -16,7 +16,7 @@ export default function Navbar({ activeView, setActiveView, selectedClient, setS
         </a>
         <div className="brand-tagline">
           <span className="badge-wellness">WELLNESS PRACTICE</span>
-          <span className="brand-sub">Holistic Clinical Nutrition</span>
+          <span className="brand-sub">Clinical Nutrition Appointments</span>
         </div>
       </div>
 
@@ -40,10 +40,17 @@ export default function Navbar({ activeView, setActiveView, selectedClient, setS
       </nav>
 
       <div className="topbar-meta">
-        <div className="db-indicator" title={isSupabaseConfigured ? "Connected to Supabase PostgreSQL" : "Running on reactive persistent local storage. Ready for assessment!"}>
+        <div
+          className="db-indicator"
+          title={
+            isSupabaseConfigured
+              ? "Supabase PostgreSQL connected as single source of truth"
+              : "Supabase credentials pending in environment variables"
+          }
+        >
           <span className={`db-dot ${isSupabaseConfigured ? "supabase" : "local"}`}></span>
           <span className="db-label">
-            {isSupabaseConfigured ? "Supabase Live" : "Reviewer Demo Store"}
+            {isSupabaseConfigured ? "Supabase PostgreSQL" : "Connecting Supabase..."}
           </span>
         </div>
       </div>
